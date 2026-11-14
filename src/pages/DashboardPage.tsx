@@ -1,432 +1,404 @@
-import React from 'react';
-import { Calendar, ShieldAlert, Thermometer, Activity, Download, AlertTriangle, ArrowRight, Filter } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Sun,
+  Sunset,
+  Moon,
+  Thermometer,
+  Gauge,
+  Plus,
+  Snowflake,
+  Waves,
+  ChevronRight,
+  Download,
+  Sparkles,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useLogs } from '../context/LogsContext';
+import type { Shift } from '../types/domain';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { logs, equipments, exportExcel } = useLogs();
+  const [selectedShift, setSelectedShift] = useState<Shift>('mañana');
+
+  // Métricas en vivo para la Hero Card flotante
+  const activeLogs = logs.filter((l) => l.values?.estado_equipo === 'ON');
+
+  const avgDeltaT =
+    activeLogs.length > 0
+      ? (
+          activeLogs.reduce((acc, l) => acc + Number(l.values?.delta_t_agua || 0), 0) /
+          activeLogs.length
+        ).toFixed(1)
+      : '9.6';
+
+  const maxDeltaP =
+    activeLogs.length > 0
+      ? Math.max(...activeLogs.map((l) => Number(l.values?.delta_p_filtro || 0))).toFixed(1)
+      : '18.5';
+
+  const equipmentsOnCount = equipments.filter((eq) => {
+    const latest = logs.find((l) => l.equipmentId === eq.id);
+    return (latest?.values?.estado_equipo ?? 'ON') === 'ON';
+  }).length;
+
+  const activeAlertsCount = logs.filter((l) => l.hasAlerts).length;
+
+  const shifts: {
+    id: Shift;
+    label: string;
+    hours: string;
+    icon: React.FC<{ className?: string }>;
+  }[] = [
+    { id: 'mañana', label: 'Mañana', hours: '07:00 – 15:00', icon: Sun },
+    { id: 'tarde', label: 'Tarde', hours: '15:00 – 23:00', icon: Sunset },
+    { id: 'noche', label: 'Noche', hours: '23:00 – 07:00', icon: Moon },
+  ];
+
+  const shiftLogs = logs.filter((l) => l.shift === selectedShift);
 
   return (
-    <div className="space-y-6">
-      {/* HEADER SUPERIOR */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            Resumen y Tendencias Operativas
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Monitoreo técnico de chiller, cuartos de compresores y variables termodinámicas en tiempo real.
-          </p>
+    <div className="space-y-8">
+      {/* 1. CABECERA CON TARJETA RESUMEN FLOTANTE (HERO CARD) */}
+      <div className="relative">
+        {/* Bloque superior con degradado suave en azul industrial */}
+        <div
+          style={{ padding: '2rem 1.75rem 4.25rem 1.75rem' }}
+          className="rounded-3xl bg-gradient-to-br from-sky-600 via-sky-600 to-blue-700 text-white shadow-md shadow-sky-600/15"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 text-sky-100 text-xs font-medium">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{user?.companyName || 'Planta Central'} · Formato Oficial F-25</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                Hola, {user?.name || 'Carlos Rivas'}
+              </h1>
+              <p className="text-sky-100/90 text-xs sm:text-sm">
+                Turno {selectedShift.charAt(0).toUpperCase() + selectedShift.slice(1)} activo · Cuarto de Chillers en operación
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={exportExcel}
+                style={{ padding: '0.6rem 1rem' }}
+                className="rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Reporte F-25</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/bitacoras?nueva=1&turno=${selectedShift}`)}
+                style={{ padding: '0.6rem 1.1rem' }}
+                className="rounded-2xl bg-white hover:bg-sky-50 text-sky-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Tomar Ronda</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="px-3.5 py-2 rounded-xl bg-[#091526] border border-[#162a4a] text-xs font-mono text-slate-400 flex items-center gap-2">
-            <span className="text-[#00a8ff]">⚡</span>
-            <span>Última sincronización: 14:18 hrs</span>
+        {/* Tarjeta blanca flotante superpuesta (2x2 en móvil, 4 cols en PC) */}
+        <div
+          style={{ padding: '1.25rem 1.5rem' }}
+          className="relative z-10 -mt-10 mx-3 sm:mx-6 bg-white rounded-3xl shadow-lg shadow-slate-200/70 border border-slate-100 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+        >
+          <div className="space-y-1">
+            <div className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              {avgDeltaT} <span className="text-base font-semibold text-slate-400">°F</span>
+            </div>
+            <div className="text-xs font-medium text-slate-400">Temp. Promedio</div>
           </div>
 
+          <div className="space-y-1">
+            <div className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              {maxDeltaP}{' '}
+              <span className="text-base font-semibold text-slate-400">PSI</span>
+            </div>
+            <div className="text-xs font-medium text-slate-400">Presión Máx</div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              {equipmentsOnCount}{' '}
+              <span className="text-lg font-semibold text-slate-300">/</span>{' '}
+              {equipments.length}
+            </div>
+            <div className="text-xs font-medium text-slate-400">Equipos ON</div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-2xl sm:text-3xl font-bold tracking-tight ${
+                  activeAlertsCount > 0 ? 'text-amber-500' : 'text-slate-900'
+                }`}
+              >
+                {activeAlertsCount}
+              </span>
+              {activeAlertsCount > 0 && (
+                <span
+                  style={{ padding: '0.15rem 0.5rem' }}
+                  className="rounded-full bg-amber-50 text-amber-600 text-[11px] font-semibold"
+                >
+                  Revisión
+                </span>
+              )}
+            </div>
+            <div className="text-xs font-medium text-slate-400">Alertas</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. SELECTOR DE TURNOS ("Turnos / Rondas") */}
+      <section className="space-y-3.5">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-base font-bold text-slate-900">Turnos / Rondas</h2>
+          <span className="text-xs font-medium text-slate-400">
+            {shiftLogs.length}{' '}
+            {shiftLogs.length === 1 ? 'lectura en turno' : 'lecturas en turno'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3.5 sm:gap-4">
+          {shifts.map((shift) => {
+            const Icon = shift.icon;
+            const isSelected = selectedShift === shift.id;
+
+            return (
+              <button
+                key={shift.id}
+                type="button"
+                onClick={() => setSelectedShift(shift.id)}
+                style={{ padding: '1.25rem 1rem' }}
+                className={`rounded-3xl flex flex-col items-center justify-center gap-2.5 text-center transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25 scale-[1.01]'
+                    : 'bg-white text-slate-700 border border-slate-100 shadow-xs hover:border-sky-100 hover:bg-sky-50/30'
+                }`}
+              >
+                <div
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-colors ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : 'bg-sky-50 text-sky-600'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm">{shift.label}</div>
+                  <div
+                    className={`text-[11px] mt-0.5 ${
+                      isSelected ? 'text-sky-100' : 'text-slate-400'
+                    }`}
+                  >
+                    {shift.hours}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 3. TARJETAS DE EQUIPOS ("Áreas y Máquinas") */}
+      <section className="space-y-3.5">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-base font-bold text-slate-900">Áreas y Máquinas</h2>
           <button
-            onClick={() => alert('Generando reporte mensual oficial F-25 en Excel...')}
-            className="px-4 py-2 rounded-xl bg-[#00a8ff] hover:bg-[#0096e6] text-[#050b14] font-bold text-xs flex items-center gap-2 shadow-lg shadow-[#00a8ff]/20 transition-all cursor-pointer font-sans"
+            type="button"
+            onClick={() => navigate('/equipos')}
+            className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1 cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>Exportar Reporte Mensual</span>
+            <span>Ver todos</span>
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
-      </div>
 
-      {/* FILA DE 4 TARJETAS KPI */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: RONDAS */}
-        <div className="bg-[#0b172a] border border-[#152a48] rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[11px]">
-              RONDAS REGISTRADAS
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-[#0e2445] text-[#00a8ff] flex items-center justify-center">
-              <Calendar className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white font-mono">142</span>
-            <span className="text-xs text-slate-400 font-mono">/ 150 rondas</span>
-          </div>
-          <div className="text-[11px] font-mono text-emerald-400 flex items-center gap-1.5 pt-1">
-            <span>✓</span>
-            <span>94.6% cumplimiento de turno</span>
-          </div>
-        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {equipments.map((eq) => {
+            const latestLog = logs.find((l) => l.equipmentId === eq.id);
+            const v = latestLog?.values || {};
+            const isOnline = (v.estado_equipo ?? 'OFF') === 'ON';
+            const hasAlert = latestLog?.hasAlerts ?? false;
+            const isPump = eq.tag.startsWith('BC');
 
-        {/* KPI 2: DISPONIBILIDAD */}
-        <div className="bg-[#0b172a] border border-[#152a48] rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[11px]">
-              DISPONIBILIDAD DEL EQUIPO
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-              <Activity className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-white font-mono">
-            98.4%
-          </div>
-          <div className="text-[11px] font-mono text-emerald-400 flex items-center gap-1.5 pt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>Máquinas en estado ON</span>
-          </div>
-        </div>
+            return (
+              <div
+                key={eq.id}
+                onClick={() => navigate(`/bitacoras?nueva=1&equipo=${eq.id}`)}
+                style={{ padding: '1.25rem' }}
+                className="rounded-2xl bg-white border border-slate-100 shadow-xs hover:shadow-md hover:border-sky-100 transition-all cursor-pointer flex flex-col justify-between gap-4 group"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    {/* Icono cuadrado con fondo suave a la izquierda */}
+                    <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 group-hover:bg-sky-500 group-hover:text-white transition-colors">
+                      {isPump ? (
+                        <Waves className="w-6 h-6" />
+                      ) : (
+                        <Snowflake className="w-6 h-6" />
+                      )}
+                    </div>
 
-        {/* KPI 3: ALERTAS ACTIVAS */}
-        <div className="bg-[#0b172a] border border-[#152a48] rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-amber-400 uppercase tracking-wider text-[11px]">
-              ALERTAS ACTIVAS
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-400 font-mono">2</span>
-            <span className="text-xs text-slate-400">en revisión técnica</span>
-          </div>
-          <div className="text-[11px] font-mono text-amber-400/90 truncate pt-1">
-            ΔP Filtro fuera de rango
-          </div>
-        </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-sm truncate">
+                          {eq.tag} · {eq.name.split(' ')[0]}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400 truncate mt-0.5">
+                        {eq.name}
+                      </div>
+                    </div>
+                  </div>
 
-        {/* KPI 4: PROMEDIO DELTA T */}
-        <div className="bg-[#0b172a] border border-[#152a48] rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[11px]">
-              PROMEDIO ΔT AGUA
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-[#0e2445] text-[#00a8ff] flex items-center justify-center">
-              <Thermometer className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-[#00a8ff] font-mono">
-            10.2 <span className="text-sm font-normal text-slate-300">°F</span>
-          </div>
-          <div className="text-[11px] font-mono text-slate-400 pt-1">
-            Rango óptimo: 9.5 - 11.0 °F
-          </div>
-        </div>
-      </div>
+                  {/* Pill discreto de estado o alerta */}
+                  {hasAlert ? (
+                    <span
+                      style={{ padding: '0.2rem 0.55rem' }}
+                      className="rounded-full bg-amber-50 text-amber-600 border border-amber-200/60 text-[11px] font-semibold flex items-center gap-1.5 shrink-0"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      Alerta
+                    </span>
+                  ) : isOnline ? (
+                    <span
+                      style={{ padding: '0.2rem 0.55rem' }}
+                      className="rounded-full bg-emerald-50 text-emerald-600 text-[11px] font-semibold flex items-center gap-1.5 shrink-0"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      ON
+                    </span>
+                  ) : (
+                    <span
+                      style={{ padding: '0.2rem 0.55rem' }}
+                      className="rounded-full bg-slate-100 text-slate-500 text-[11px] font-medium shrink-0"
+                    >
+                      Standby
+                    </span>
+                  )}
+                </div>
 
-      {/* GRÁFICOS DE TELEMETRÍA (2 COLUMNAS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* GRÁFICO 1: TEMPERATURAS EWT VS LWT */}
-        <div className="bg-[#0b172a] border border-[#152a48] rounded-2xl p-5 space-y-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[#00a8ff]">📈</span>
-                <h3 className="font-bold text-sm text-white">
-                  Temperaturas EWT vs LWT por Turno
-                </h3>
+                {/* 2 indicadores compactos con mini-iconos (Temperatura EWT/LWT y Presión Filtro) */}
+                <div
+                  style={{ padding: '0.75rem 0.9rem' }}
+                  className="rounded-xl bg-slate-50/80 flex items-center justify-between gap-2 text-xs"
+                >
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <Thermometer className="w-4 h-4 text-sky-500 shrink-0" />
+                    {isOnline && v.ewt_temp !== undefined ? (
+                      <span>
+                        <strong className="text-slate-900 font-semibold">
+                          {v.ewt_temp}° / {v.lwt_temp}°F
+                        </strong>{' '}
+                        <span className="text-slate-400 text-[11px]">
+                          (Dif. {v.delta_t_agua}°)
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">Sin flujo térmico</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-slate-600">
+                    <Gauge
+                      className={`w-4 h-4 shrink-0 ${
+                        Number(v.delta_p_filtro) > 10
+                          ? 'text-amber-500'
+                          : 'text-sky-500'
+                      }`}
+                    />
+                    {isOnline && v.delta_p_filtro !== undefined ? (
+                      <strong
+                        className={`font-semibold ${
+                          Number(v.delta_p_filtro) > 10
+                            ? 'text-amber-600'
+                            : 'text-slate-900'
+                        }`}
+                      >
+                        {v.delta_p_filtro} PSI
+                      </strong>
+                    ) : (
+                      <span className="text-slate-400">-- PSI</span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Agua Helada: Entrada (EWT) vs Salida Evaporador (LWT)
-              </p>
-            </div>
+            );
+          })}
+        </div>
+      </section>
 
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded bg-[#00a8ff]/20 text-[#00a8ff] border border-[#00a8ff]/40 text-xs font-mono font-bold">
-                CH-01
-              </span>
-              <span className="px-2 py-0.5 rounded bg-[#091526] text-slate-300 border border-[#162a4a] text-xs font-mono">
-                Últimos 7 días
-              </span>
-            </div>
-          </div>
-
-          {/* LEYENDA TÉCNICA */}
-          <div className="flex flex-wrap items-center gap-4 text-xs font-mono pt-1 border-t border-[#142642]">
-            <div className="flex items-center gap-2 text-slate-300">
-              <span className="w-3 h-0.5 bg-[#38bdf8]" />
-              <span>EWT Entrada (Prom: 54.4°F)</span>
-            </div>
-            <div className="flex items-center gap-2 text-slate-300">
-              <span className="w-3 h-0.5 bg-[#10b981]" />
-              <span>LWT Salida (Prom: 44.2°F)</span>
-            </div>
-            <div className="text-[#00a8ff] font-bold">
-              ΔT Prom = 10.2°F
-            </div>
-          </div>
-
-          {/* SVG CHART SIMULADO CON ONDAS SUAVES */}
-          <div className="h-48 w-full relative pt-2">
-            <svg className="w-full h-full overflow-visible" viewBox="0 0 500 160">
-              {/* LÍNEAS DE GUÍA */}
-              <line x1="0" y1="30" x2="500" y2="30" stroke="#142642" strokeDasharray="3 3" />
-              <line x1="0" y1="80" x2="500" y2="80" stroke="#142642" strokeDasharray="3 3" />
-              <line x1="0" y1="130" x2="500" y2="130" stroke="#142642" strokeDasharray="3 3" />
-
-              <text x="0" y="25" fill="#64748b" fontSize="10" fontFamily="monospace">60°F</text>
-              <text x="0" y="75" fill="#64748b" fontSize="10" fontFamily="monospace">52°F</text>
-              <text x="0" y="125" fill="#64748b" fontSize="10" fontFamily="monospace">44°F</text>
-
-              {/* ÁREA Y CURVA EWT (ENTRADA ~54°F) */}
-              <path
-                d="M 30,58 Q 110,50 180,55 T 320,52 T 480,56"
-                fill="none"
-                stroke="#38bdf8"
-                strokeWidth="2.5"
-              />
-              <circle cx="280" cy="52" r="4" fill="#38bdf8" stroke="#050b14" strokeWidth="2" />
-              <text x="280" y="42" fill="#38bdf8" fontSize="10" fontFamily="monospace" textAnchor="middle">54.6°</text>
-
-              {/* ÁREA Y CURVA LWT (SALIDA ~44°F) */}
-              <path
-                d="M 30,122 Q 110,126 180,120 T 320,124 T 480,121"
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="2.5"
-              />
-              <circle cx="280" cy="124" r="4" fill="#10b981" stroke="#050b14" strokeWidth="2" />
-              <text x="280" y="142" fill="#10b981" fontSize="10" fontFamily="monospace" textAnchor="middle">44.1°</text>
-            </svg>
-
-            {/* EJE X */}
-            <div className="flex justify-between text-[10px] font-mono text-slate-500 pt-2 px-2">
-              <span>Lun T-1</span>
-              <span>Lun T-2</span>
-              <span>Mar T-1</span>
-              <span>Mar T-2</span>
-              <span>Mié T-1</span>
-              <span>Mié T-2</span>
-              <span>Hoy T-1</span>
-            </div>
-          </div>
+      {/* 4. RESUMEN DE RONDAS DEL TURNO SELECCIONADO */}
+      <section className="space-y-3.5">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-base font-bold text-slate-900">
+            Rondas Registradas — Turno{' '}
+            {selectedShift.charAt(0).toUpperCase() + selectedShift.slice(1)}
+          </h2>
+          <button
+            type="button"
+            onClick={() => navigate('/bitacoras')}
+            className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1 cursor-pointer"
+          >
+            <span>Historial completo</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* GRÁFICO 2: % DE CARGA Y AMPERAJE */}
-        <div className="bg-[#0b172a] border border-[#152a48] rounded-2xl p-5 space-y-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[#00a8ff]">⚡</span>
-                <h3 className="font-bold text-sm text-white">
-                  % de Carga y Amperaje Total
-                </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {(shiftLogs.length > 0 ? shiftLogs : logs.slice(0, 2)).map((log) => {
+            const eq = equipments.find((e) => e.id === log.equipmentId);
+            const v = log.values || {};
+
+            return (
+              <div
+                key={log.id}
+                onClick={() => navigate('/bitacoras')}
+                style={{ padding: '1.1rem 1.25rem' }}
+                className="rounded-2xl bg-white border border-slate-100 shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-4"
+              >
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-900">
+                      {eq?.tag || log.equipmentId}
+                    </span>
+                    <span className="text-xs text-slate-400">·</span>
+                    <span className="text-xs font-medium text-slate-500">
+                      {log.date} ({v.hora || '--'})
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 truncate">
+                    {log.observations || 'Lectura operativa dentro de parámetros.'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  {v.delta_t_agua !== undefined && (
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-sky-600">
+                        {v.delta_t_agua} °F
+                      </div>
+                      <div className="text-[10px] text-slate-400">Dif. Agua</div>
+                    </div>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                </div>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Demanda eléctrica de compresores vs Capacidad de diseño
-              </p>
-            </div>
-
-            <span className="px-2.5 py-0.5 rounded bg-[#091526] text-[#00a8ff] border border-[#162a4a] text-xs font-mono font-bold">
-              FLA: 410A
-            </span>
-          </div>
-
-          {/* LEYENDA TÉCNICA */}
-          <div className="flex flex-wrap items-center gap-4 text-xs font-mono pt-1 border-t border-[#142642]">
-            <div className="flex items-center gap-2 text-slate-300">
-              <span className="w-3 h-0.5 bg-[#f59e0b]" />
-              <span>% Carga (Prom: 78.5%)</span>
-            </div>
-            <div className="flex items-center gap-2 text-slate-300">
-              <span className="w-3 h-0.5 bg-[#38bdf8]" />
-              <span>Amperaje (Prom: 322 A)</span>
-            </div>
-            <div className="text-emerald-400 font-bold">
-              Factor Potencia: 0.92
-            </div>
-          </div>
-
-          {/* SVG CHART SIMULADO CON PICOS DE DEMANDA */}
-          <div className="h-48 w-full relative pt-2">
-            <svg className="w-full h-full overflow-visible" viewBox="0 0 500 160">
-              <line x1="0" y1="30" x2="500" y2="30" stroke="#142642" strokeDasharray="3 3" />
-              <line x1="0" y1="80" x2="500" y2="80" stroke="#142642" strokeDasharray="3 3" />
-              <line x1="0" y1="130" x2="500" y2="130" stroke="#142642" strokeDasharray="3 3" />
-
-              <text x="0" y="25" fill="#64748b" fontSize="10" fontFamily="monospace">100%</text>
-              <text x="0" y="75" fill="#64748b" fontSize="10" fontFamily="monospace">75%</text>
-              <text x="0" y="125" fill="#64748b" fontSize="10" fontFamily="monospace">50%</text>
-
-              {/* CURVA % CARGA (AMARILLO/NARANJA) */}
-              <path
-                d="M 30,90 Q 70,60 110,65 T 190,85 T 270,70 T 350,68 T 420,48 T 480,55"
-                fill="none"
-                stroke="#f59e0b"
-                strokeWidth="2.5"
-              />
-              <circle cx="420" cy="48" r="4" fill="#f59e0b" stroke="#050b14" strokeWidth="2" />
-              <text x="420" y="38" fill="#f59e0b" fontSize="10" fontFamily="monospace" textAnchor="middle">84% / 344A</text>
-
-              {/* CURVA AMPERAJE (CIAN) */}
-              <path
-                d="M 30,96 Q 70,70 110,72 T 190,92 T 270,78 T 350,75 T 420,56 T 480,62"
-                fill="none"
-                stroke="#38bdf8"
-                strokeWidth="2"
-                strokeDasharray="4 2"
-              />
-            </svg>
-
-            {/* EJE X */}
-            <div className="flex justify-between text-[10px] font-mono text-slate-500 pt-2 px-2">
-              <span>Lun T-1</span>
-              <span>Lun T-2</span>
-              <span>Mar T-1</span>
-              <span>Mar T-2</span>
-              <span>Mié T-1</span>
-              <span>Mié T-2</span>
-              <span>Hoy T-1</span>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      </div>
-
-      {/* TABLA: ÚLTIMAS NOVEDADES Y ALERTAS TÉCNICAS */}
-      <div className="bg-[#0b172a] border border-[#152a48] rounded-2xl p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
-              <h3 className="font-bold text-sm text-white">
-                Últimas Novedades y Alertas Técnicas
-              </h3>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Eventos detectados por algoritmos automáticos de tolerancia en bitácoras
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button className="px-3 py-1.5 rounded-lg bg-[#070e1c] border border-[#172b48] text-xs text-slate-300 flex items-center gap-1.5 hover:border-slate-600 transition-colors cursor-pointer">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <span>Solo No Resueltas</span>
-            </button>
-
-            <button
-              onClick={() => navigate('/bitacoras')}
-              className="text-xs font-semibold text-[#00a8ff] hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>Ver Todas en Bitácoras</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* TABLA SCADA DE ALERTAS */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-sans">
-            <thead>
-              <tr className="border-b border-[#142642] text-[11px] font-mono text-slate-400 uppercase tracking-wider">
-                <th className="pb-3 font-semibold">Fecha y Turno</th>
-                <th className="pb-3 font-semibold">Equipo</th>
-                <th className="pb-3 font-semibold">Variable Afectada</th>
-                <th className="pb-3 font-semibold">Lectura vs Límite</th>
-                <th className="pb-3 font-semibold">Diagnóstico / Condición</th>
-                <th className="pb-3 font-semibold">Operador</th>
-                <th className="pb-3 font-semibold text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#13233a] text-slate-200">
-              {/* FILA 1 */}
-              <tr className="hover:bg-[#0e1d35]/50 transition-colors">
-                <td className="py-3.5 font-mono text-slate-300">
-                  12 Nov 2026 <span className="text-[#00a8ff]">T-1</span>
-                </td>
-                <td className="py-3.5 font-semibold text-white">
-                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-2" />
-                  CH-01 (York 350 TR)
-                </td>
-                <td className="py-3.5 text-slate-300 font-mono">
-                  ΔP Filtro Aceite
-                </td>
-                <td className="py-3.5 font-mono">
-                  <span className="text-amber-400 font-bold">18.5 PSI</span>{' '}
-                  <span className="text-slate-500 text-[10px]">{'(>15.0 max)'}</span>
-                </td>
-                <td className="py-3.5">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[11px] font-medium">
-                    ⚠️ Limpieza requerida
-                  </span>
-                </td>
-                <td className="py-3.5 text-slate-400 font-mono">C. Rivas</td>
-                <td className="py-3.5 text-right">
-                  <button
-                    onClick={() => navigate('/bitacoras')}
-                    className="text-[#00a8ff] hover:underline font-semibold font-mono text-xs cursor-pointer"
-                  >
-                    Ver Bitácora
-                  </button>
-                </td>
-              </tr>
-
-              {/* FILA 2 */}
-              <tr className="hover:bg-[#0e1d35]/50 transition-colors">
-                <td className="py-3.5 font-mono text-slate-300">
-                  11 Nov 2026 <span className="text-[#00a8ff]">T-2</span>
-                </td>
-                <td className="py-3.5 font-semibold text-white">
-                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-2" />
-                  CH-02 (Trane 400 TR)
-                </td>
-                <td className="py-3.5 text-slate-300 font-mono">
-                  ΔT Agua Helada
-                </td>
-                <td className="py-3.5 font-mono">
-                  <span className="text-amber-400 font-bold">7.8 °F</span>{' '}
-                  <span className="text-slate-500 text-[10px]">{'<9.0 min'}</span>
-                </td>
-                <td className="py-3.5">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[11px] font-medium">
-                    ⚠️ Caudal excesivo / Bajo salto
-                  </span>
-                </td>
-                <td className="py-3.5 text-slate-400 font-mono">M. Soto</td>
-                <td className="py-3.5 text-right">
-                  <button
-                    onClick={() => navigate('/bitacoras')}
-                    className="text-[#00a8ff] hover:underline font-semibold font-mono text-xs cursor-pointer"
-                  >
-                    Ver Bitácora
-                  </button>
-                </td>
-              </tr>
-
-              {/* FILA 3 */}
-              <tr className="hover:bg-[#0e1d35]/50 transition-colors">
-                <td className="py-3.5 font-mono text-slate-300">
-                  10 Nov 2026 <span className="text-[#00a8ff]">T-3</span>
-                </td>
-                <td className="py-3.5 font-semibold text-white">
-                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-2" />
-                  BC-03 (Bomba Primaria)
-                </td>
-                <td className="py-3.5 text-slate-300 font-mono">
-                  Amperaje Motor L1
-                </td>
-                <td className="py-3.5 font-mono">
-                  <span className="text-emerald-400 font-bold">42.1 A</span>{' '}
-                  <span className="text-slate-500 text-[10px]">(45.0 FLA)</span>
-                </td>
-                <td className="py-3.5">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[11px] font-medium">
-                    ✓ Normalizado
-                  </span>
-                </td>
-                <td className="py-3.5 text-slate-400 font-mono">E. Valdés</td>
-                <td className="py-3.5 text-right">
-                  <button
-                    onClick={() => navigate('/bitacoras')}
-                    className="text-slate-400 hover:text-white font-mono text-xs cursor-pointer"
-                  >
-                    Detalle
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </section>
     </div>
   );
 };
-

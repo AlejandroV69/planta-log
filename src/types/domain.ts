@@ -93,6 +93,9 @@ export interface UserProfile {
     email: string;
     roles: UserRoles;
     badgeNumber?: string;
-    assignedArea?:string;
-    defaultShift?:Shift;
+    assignedArea?: string;
+    defaultShift?: Shift;
+    companyId?: string;
+    companyName?: string;
+    pin?: string;
 }

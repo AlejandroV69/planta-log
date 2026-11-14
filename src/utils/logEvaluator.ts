@@ -69,14 +69,14 @@ export function evaluateLogValues(
       const numVal = Number(val);
       if (isNaN(numVal)) continue;
 
-      // REGLA 1: Caída de presión del filtro de agua (ΔP > 10 PSI)
+      // REGLA 1: Caída de presión del filtro de agua (Dif. Presión > 10 PSI)
       if (field.id === 'delta_p_filtro' && numVal > 10.0) {
         alerts.push({
           fieldId: field.id,
           fieldLabel: field.label,
           value: numVal,
           severity: numVal > 15.0 ? 'critical' : 'warning',
-          message: `ΔP Filtro Agua (${numVal} PSI) > 10 PSI máx. Requiere limpieza de filtro 'Y'.`,
+          message: `Dif. Filtro Agua (${numVal} PSI) > 10 PSI máx. Requiere limpieza de filtro 'Y'.`,
         });
         continue;
       }
@@ -93,7 +93,7 @@ export function evaluateLogValues(
         continue;
       }
 
-      // REGLA 3: Salto térmico del agua helada (ΔT óptimo 8 - 12 °F)
+      // REGLA 3: Salto térmico del agua helada (Dif. Temp. óptimo 8 - 12 °F)
       if (field.id === 'delta_t_agua') {
         if (numVal < 8.0) {
           alerts.push({
@@ -101,7 +101,7 @@ export function evaluateLogValues(
             fieldLabel: field.label,
             value: numVal,
             severity: 'warning',
-            message: `ΔT Agua (${numVal} °F) inferior al óptimo (8 - 12 °F). Posible caudal excesivo o bajo salto.`,
+            message: `Dif. Temp. Agua (${numVal} °F) inferior al óptimo (8 - 12 °F). Posible caudal excesivo o bajo salto.`,
           });
           continue;
         } else if (numVal > 12.0) {
@@ -110,7 +110,7 @@ export function evaluateLogValues(
             fieldLabel: field.label,
             value: numVal,
             severity: 'warning',
-            message: `ΔT Agua (${numVal} °F) superior al óptimo (8 - 12 °F). Revisar caudal de bombas primarias.`,
+            message: `Dif. Temp. Agua (${numVal} °F) superior al óptimo (8 - 12 °F). Revisar caudal de bombas primarias.`,
           });
           continue;
         }

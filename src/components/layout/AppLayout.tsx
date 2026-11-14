@@ -1,7 +1,17 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutGrid, ClipboardList, Cpu, FileSpreadsheet, Bot, LogOut } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  Home,
+  ClipboardList,
+  Cpu,
+  Sliders,
+  Plus,
+  LogOut,
+  Droplets,
+  Download,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLogs } from '../../context/LogsContext';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -9,207 +19,207 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
+  const { logs, exportExcel } = useLogs();
+  const navigate = useNavigate();
+
+  const activeAlertsCount = logs.filter((l) => l.hasAlerts).length;
+
+  const navItems = [
+    {
+      to: '/resumen',
+      label: 'Inicio',
+      icon: Home,
+    },
+    {
+      to: '/bitacoras',
+      label: 'Bitácoras',
+      icon: ClipboardList,
+      badge: activeAlertsCount > 0 ? activeAlertsCount : undefined,
+    },
+    {
+      to: '/equipos',
+      label: 'Máquinas',
+      icon: Cpu,
+    },
+    {
+      to: '/plantillas',
+      label: 'Formato',
+      icon: Sliders,
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#050b14] text-slate-100 flex font-sans selection:bg-[#00a8ff] selection:text-black">
-      {/* SIDEBAR FIJO IZQUIERDO (SCADA INDUSTRIAL SUITE) */}
-      <aside className="w-64 shrink-0 bg-[#070e1c] border-r border-[#13233a] flex flex-col justify-between hidden md:flex min-h-screen p-4 sticky top-0">
-        <div className="space-y-5">
-          {/* LOGO EMPRESARIAL */}
-          <div className="flex items-center gap-3 px-1 py-1">
-            <div className="w-9 h-9 rounded-xl bg-[#0c223f] border border-[#00a8ff]/40 flex items-center justify-center text-[#00a8ff] shadow-sm shadow-[#00a8ff]/20">
-              <Bot className="w-5 h-5" />
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex font-sans selection:bg-sky-100 selection:text-sky-900">
+      {/* NAVEGACIÓN LATERAL MINIMALISTA EN BLANCO (ESCRITORIO) */}
+      <aside
+        style={{ padding: '1.5rem 1.25rem' }}
+        className="w-64 shrink-0 bg-white border-r border-slate-100 hidden md:flex flex-col justify-between min-h-screen sticky top-0 select-none"
+      >
+        <div className="space-y-7">
+          {/* LOGO ESTILO SMART APP */}
+          <div
+            style={{ padding: '0.25rem 0.5rem' }}
+            className="flex items-center gap-3"
+          >
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
+              <Droplets className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-white font-bold tracking-tight text-base leading-tight">
+              <div className="text-slate-900 font-bold tracking-tight text-base leading-tight">
                 PlantaLog
               </div>
-              <div className="text-[#00a8ff] text-[10px] font-mono tracking-widest uppercase font-semibold">
-                INDUSTRIAL SUITE
+              <div className="text-slate-400 text-xs font-medium">
+                Smart Control F-25
               </div>
             </div>
           </div>
 
-          {/* TARJETA TURNO ACTIVO */}
-          <div className="p-3 rounded-xl bg-[#0b162a] border border-[#172b48] space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium">Turno Activo:</span>
-              <span className="text-emerald-400 font-semibold flex items-center gap-1.5 text-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                T-1 Mañana
-              </span>
-            </div>
-            <div className="text-[11px] font-mono text-slate-500">
-              🕒 07:00 - 15:00 hrs
-            </div>
+          {/* BOTÓN TÁCTIL PRINCIPAL */}
+          <div>
+            <button
+              type="button"
+              onClick={() => navigate('/bitacoras?nueva=1')}
+              style={{ padding: '0.8rem 1rem' }}
+              className="w-full rounded-2xl bg-sky-500 hover:bg-sky-600 active:scale-[0.99] text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-sky-500/25 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Nueva Ronda</span>
+            </button>
           </div>
 
-          {/* NAVEGACIÓN PRINCIPAL */}
-          <nav className="space-y-1.5 text-xs font-semibold">
-            {/* RESUMEN */}
-            <NavLink
-              to="/resumen"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-[#00a8ff] text-[#050b14] font-bold shadow-lg shadow-[#00a8ff]/25'
-                    : 'text-slate-400 hover:text-white hover:bg-[#0c1a30]'
-                }`
-              }
-            >
-              <LayoutGrid className="w-4 h-4" />
-              <span>Resumen</span>
-            </NavLink>
-
-            {/* BITÁCORAS CON BADGE */}
-            <NavLink
-              to="/bitacoras"
-              className={({ isActive }) =>
-                `w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-[#00a8ff] text-[#050b14] font-bold shadow-lg shadow-[#00a8ff]/25'
-                    : 'text-slate-400 hover:text-white hover:bg-[#0c1a30]'
-                }`
-              }
-            >
-              <div className="flex items-center gap-3">
-                <ClipboardList className="w-4 h-4" />
-                <span>Bitácoras</span>
-              </div>
-              <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-mono font-bold">
-                2
-              </span>
-            </NavLink>
-
-            {/* EQUIPOS */}
-            <NavLink
-              to="/equipos"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-[#00a8ff] text-[#050b14] font-bold shadow-lg shadow-[#00a8ff]/25'
-                    : 'text-slate-400 hover:text-white hover:bg-[#0c1a30]'
-                }`
-              }
-            >
-              <Cpu className="w-4 h-4" />
-              <span>Equipos</span>
-            </NavLink>
-
-            {/* PLANTILLAS */}
-            <NavLink
-              to="/plantillas"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-[#00a8ff] text-[#050b14] font-bold shadow-lg shadow-[#00a8ff]/25'
-                    : 'text-slate-400 hover:text-white hover:bg-[#0c1a30]'
-                }`
-              }
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Plantillas</span>
-            </NavLink>
+          {/* MENÚ DE NAVEGACIÓN */}
+          <nav className="space-y-1.5">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  style={{ padding: '0.75rem 1rem' }}
+                  className={({ isActive }) =>
+                    `w-full flex items-center justify-between rounded-2xl text-sm font-medium transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-sky-50 text-sky-600 font-semibold'
+                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <Icon
+                          className={`w-5 h-5 ${
+                            isActive ? 'text-sky-600' : 'text-slate-400'
+                          }`}
+                        />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.badge !== undefined && (
+                        <span
+                          style={{ padding: '0.15rem 0.55rem' }}
+                          className="rounded-full bg-amber-100 text-amber-700 text-xs font-semibold"
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              );
+            })}
           </nav>
+
+          {/* EXPORTACIÓN RÁPIDA EXCEL */}
+          <div
+            style={{ padding: '1rem' }}
+            className="rounded-2xl bg-slate-50 border border-slate-100 space-y-2.5"
+          >
+            <div className="text-xs font-semibold text-slate-700">
+              Reporte Oficial Excel
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Descarga las lecturas del turno en la plantilla oficial F-25.
+            </p>
+            <button
+              type="button"
+              onClick={exportExcel}
+              style={{ padding: '0.55rem 0.85rem' }}
+              className="w-full rounded-xl bg-white hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-sky-600" />
+              <span>Exportar F-25 (.xlsx)</span>
+            </button>
+          </div>
         </div>
 
-        {/* USUARIO FOOTER DEL SIDEBAR */}
-        <div className="p-3 rounded-xl bg-[#0b162a] border border-[#172b48] flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-[#0e274a] border border-[#00a8ff]/40 text-[#00a8ff] font-bold text-xs flex items-center justify-center shrink-0">
-              CR
+        {/* PERFIL DEL OPERADOR */}
+        <div
+          style={{ padding: '0.75rem' }}
+          className="rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 font-bold text-xs flex items-center justify-center shrink-0">
+              {(user?.name || 'Carlos Rivas')
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)}
             </div>
             <div className="min-w-0">
-              <div className="text-white text-xs font-semibold truncate leading-tight">
+              <div className="text-slate-900 text-xs font-semibold truncate">
                 {user?.name || 'Carlos Rivas'}
               </div>
-              <div className="text-slate-400 text-[10px] truncate leading-tight mt-0.5 font-mono">
-                Técnico Chiller Lead
+              <div className="text-slate-400 text-[11px] truncate">
+                {user?.companyName ? user.companyName.split('—')[0].trim() : user?.badgeNumber || 'OP-402'}
               </div>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={logout}
             title="Cerrar sesión"
-            className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-[#12233f] transition-colors cursor-pointer"
+            style={{ padding: '0.45rem' }}
+            className="text-slate-400 hover:text-rose-500 rounded-xl hover:bg-white transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </aside>
 
-      {/* ÁREA DE CONTENIDO */}
+      {/* CONTENEDOR ESTILO APP (CENTRADO CON AIRE EN ESCRITORIO) */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* HEADER MÓVIL (para pantallas pequeñas) */}
-        <header className="md:hidden bg-[#070e1c] border-b border-[#13233a] px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#0c223f] border border-[#00a8ff]/40 flex items-center justify-center text-[#00a8ff]">
-              <Bot className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-sm tracking-tight text-white">PlantaLog</span>
-          </div>
-
-          <button
-            onClick={logout}
-            className="p-1.5 text-slate-400 hover:text-red-400"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </header>
-
-        {/* CONTENEDOR PRINCIPAL */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-7 overflow-y-auto pb-24 md:pb-6">
+        <main
+          style={{ padding: '1.25rem 1rem 6rem 1rem' }}
+          className="flex-1 w-full max-w-5xl mx-auto sm:px-6 md:py-8 md:pb-12"
+        >
           {children}
         </main>
       </div>
 
-      {/* BOTTOM NAV MÓVIL */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#070e1c]/95 backdrop-blur-xl border-t border-[#13233a] py-2 px-6 flex justify-around md:hidden text-[10px] font-semibold">
-        <NavLink
-          to="/resumen"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 ${
-              isActive ? 'text-[#00a8ff]' : 'text-slate-400'
-            }`
-          }
-        >
-          <LayoutGrid className="w-4 h-4" />
-          <span>Resumen</span>
-        </NavLink>
-        <NavLink
-          to="/bitacoras"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 ${
-              isActive ? 'text-[#00a8ff]' : 'text-slate-400'
-            }`
-          }
-        >
-          <ClipboardList className="w-4 h-4" />
-          <span>Bitácoras</span>
-        </NavLink>
-        <NavLink
-          to="/equipos"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 ${
-              isActive ? 'text-[#00a8ff]' : 'text-slate-400'
-            }`
-          }
-        >
-          <Cpu className="w-4 h-4" />
-          <span>Equipos</span>
-        </NavLink>
-        <NavLink
-          to="/plantillas"
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 ${
-              isActive ? 'text-[#00a8ff]' : 'text-slate-400'
-            }`
-          }
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>Plantillas</span>
-        </NavLink>
+      {/* BARRA INFERIOR ESTILO APP MÓVIL */}
+      <nav
+        style={{ padding: '0.6rem 1rem' }}
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-100 flex items-center justify-around md:hidden shadow-lg"
+      >
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              style={{ padding: '0.35rem 0.75rem' }}
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 rounded-xl text-[11px] font-medium transition-colors ${
+                  isActive ? 'text-sky-600 font-semibold' : 'text-slate-400'
+                }`
+              }
+            >
+              <Icon className="w-5 h-5" />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
     </div>
   );
