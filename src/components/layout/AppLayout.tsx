@@ -1,17 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Home,
   ClipboardList,
   Cpu,
-  Sliders,
   Plus,
   LogOut,
   Droplets,
   Download,
+  Moon,
+  Sun,
+  User,
+  Building2,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLogs } from '../../context/LogsContext';
+import { useTheme } from '../../context/ThemeContext';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -20,7 +25,16 @@ interface AppLayoutProps {
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const { logs, exportExcel } = useLogs();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
+
+  const roleLabel =
+    user?.roles === 'admin'
+      ? 'Administrador'
+      : user?.roles === 'supervisor'
+      ? 'Supervisor'
+      : 'Operador Técnico';
 
   const activeAlertsCount = logs.filter((l) => l.hasAlerts).length;
 
@@ -41,11 +55,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       label: 'Máquinas',
       icon: Cpu,
     },
-    {
-      to: '/plantillas',
-      label: 'Formato',
-      icon: Sliders,
-    },
   ];
 
   return (
@@ -56,22 +65,33 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         className="w-64 shrink-0 bg-white border-r border-slate-100 hidden md:flex flex-col justify-between min-h-screen sticky top-0 select-none"
       >
         <div className="space-y-7">
-          {/* LOGO ESTILO SMART APP */}
+          {/* LOGO ESTILO SMART APP + MODO NOCHE */}
           <div
             style={{ padding: '0.25rem 0.5rem' }}
-            className="flex items-center gap-3"
+            className="flex items-center justify-between gap-2"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
-              <Droplets className="w-5 h-5" />
-            </div>
-            <div>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
+                <Droplets className="w-5 h-5" />
+              </div>
               <div className="text-slate-900 font-bold tracking-tight text-base leading-tight">
                 PlantaLog
               </div>
-              <div className="text-slate-400 text-xs font-medium">
-                Smart Control F-25
-              </div>
             </div>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
+              style={{ padding: '0.5rem' }}
+              className="rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-sky-600 transition-colors cursor-pointer shrink-0"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </button>
           </div>
 
           {/* BOTÓN TÁCTIL PRINCIPAL */}
@@ -197,6 +217,117 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </main>
       </div>
 
+      {/* HOJA DE PERFIL MÓVIL (MODO NOCHE, REPORTE Y CERRAR SESIÓN) */}
+      {isMobileProfileOpen && (
+        <div
+          onClick={() => setIsMobileProfileOpen(false)}
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-end justify-center p-3 md:hidden"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ padding: '1.5rem' }}
+            className="w-full max-w-md rounded-3xl bg-white border border-slate-100 shadow-2xl space-y-5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-sky-100 text-sky-700 font-bold text-sm flex items-center justify-center shrink-0">
+                  {(user?.name || 'Carlos Rivas')
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .slice(0, 2)}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-slate-900 font-bold text-sm truncate">
+                    {user?.name || 'Carlos Rivas'}
+                  </div>
+                  <div className="text-xs text-sky-600 font-semibold">
+                    {roleLabel}
+                    {user?.badgeNumber ? ` · ${user.badgeNumber}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsMobileProfileOpen(false)}
+                style={{ padding: '0.45rem' }}
+                className="rounded-xl bg-slate-50 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {user?.companyName && (
+              <div
+                style={{ padding: '0.75rem 1rem' }}
+                className="rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-2.5 text-xs text-slate-600"
+              >
+                <Building2 className="w-4 h-4 text-sky-500 shrink-0" />
+                <span className="font-medium truncate">{user.companyName}</span>
+              </div>
+            )}
+
+            <div className="space-y-2.5">
+              {/* Switch Modo Noche / Día */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                style={{ padding: '0.85rem 1rem' }}
+                className="w-full rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-700 cursor-pointer transition-colors"
+              >
+                <span className="flex items-center gap-2.5">
+                  {theme === 'dark' ? (
+                    <Sun className="w-4 h-4 text-amber-400" />
+                  ) : (
+                    <Moon className="w-4 h-4 text-sky-500" />
+                  )}
+                  <span>{theme === 'dark' ? 'Cambiar a Modo Día' : 'Activar Modo Noche'}</span>
+                </span>
+                <span
+                  style={{ padding: '0.2rem 0.6rem' }}
+                  className={`rounded-full text-[11px] font-bold ${
+                    theme === 'dark'
+                      ? 'bg-sky-500 text-white'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {theme === 'dark' ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              {/* Exportar Excel F-25 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileProfileOpen(false);
+                  void exportExcel();
+                }}
+                style={{ padding: '0.85rem 1rem' }}
+                className="w-full rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-100 flex items-center gap-2.5 text-xs font-semibold text-slate-700 cursor-pointer transition-colors"
+              >
+                <Download className="w-4 h-4 text-sky-600" />
+                <span>Exportar Reporte F-25 (.xlsx)</span>
+              </button>
+
+              {/* Cerrar Sesión */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileProfileOpen(false);
+                  void logout();
+                }}
+                style={{ padding: '0.85rem 1rem' }}
+                className="w-full rounded-2xl bg-rose-50 hover:bg-rose-100 border border-rose-100 flex items-center justify-center gap-2 text-xs font-bold text-rose-600 cursor-pointer transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Cerrar Sesión</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* BARRA INFERIOR ESTILO APP MÓVIL */}
       <nav
         style={{ padding: '0.6rem 1rem' }}
@@ -220,6 +351,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             </NavLink>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setIsMobileProfileOpen(true)}
+          style={{ padding: '0.35rem 0.75rem' }}
+          className={`flex flex-col items-center gap-1 rounded-xl text-[11px] font-medium transition-colors cursor-pointer ${
+            isMobileProfileOpen ? 'text-sky-600 font-semibold' : 'text-slate-400'
+          }`}
+        >
+          <User className="w-5 h-5" />
+          <span>Perfil</span>
+        </button>
       </nav>
     </div>
   );

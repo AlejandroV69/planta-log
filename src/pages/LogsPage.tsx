@@ -17,10 +17,13 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { DynamicLogWizard } from '../components/logs/DynamicLogWizard';
 import { useLogs } from '../context/LogsContext';
+import { useAuth } from '../context/AuthContext';
 import type { LogEntry, Shift } from '../types/domain';
 
 export const LogsPage: React.FC = () => {
   const { logs, equipments, addLog, deleteLog, exportExcel } = useLogs();
+  const { user } = useAuth();
+  const canDelete = user?.roles === 'supervisor' || user?.roles === 'admin';
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [filterAlertsOnly, setFilterAlertsOnly] = useState(false);
@@ -47,15 +50,23 @@ export const LogsPage: React.FC = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  const handleSaveNewEntry = (newEntry: LogEntry) => {
-    addLog(newEntry);
-    setToastMessage(`Ronda de ${newEntry.shift} guardada con éxito.`);
+  const showToast = (message: string) => {
+    setToastMessage(message);
     setTimeout(() => {
       setToastMessage(null);
     }, 4000);
   };
 
-  if (isWizardOpen) {
+  const handleSaveNewEntry = async (newEntry: LogEntry) => {
+    try {
+      await addLog(newEntry);
+      showToast(`Ronda de ${newEntry.shift} guardada con éxito.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo guardar la ronda.');
+    }
+  };
+
+  if (isWizardOpen && equipments.length > 0) {
     const initialEquip =
       equipments.find((e) => e.id === wizardInitialEquipmentId) || equipments[0];
     return (
@@ -110,11 +121,8 @@ export const LogsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Rondas y Bitácoras
+            Bitácoras
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Toca cualquier tarjeta para desplegar las lecturas completas del formato F-25.
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
@@ -130,7 +138,13 @@ export const LogsPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setIsWizardOpen(true)}
+            onClick={() => {
+              if (equipments.length === 0) {
+                showToast('Primero registra un equipo en Áreas y Máquinas.');
+                return;
+              }
+              setIsWizardOpen(true);
+            }}
             style={{ padding: '0.6rem 1.1rem' }}
             className="rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/25 transition-all cursor-pointer"
           >
@@ -326,18 +340,22 @@ export const LogsPage: React.FC = () => {
                   )}
 
                   <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteLog(log.id);
-                      }}
-                      style={{ padding: '0.45rem' }}
-                      className="rounded-xl text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-                      title="Eliminar"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteLog(log.id).catch((err) =>
+                            showToast(err instanceof Error ? err.message : 'No se pudo eliminar.')
+                          );
+                        }}
+                        style={{ padding: '0.45rem' }}
+                        className="rounded-xl text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
 
                     <div
                       style={{ padding: '0.45rem' }}

@@ -22,29 +22,57 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { logs, equipments, exportExcel } = useLogs();
   const [selectedShift, setSelectedShift] = useState<Shift>('mañana');
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<string>('ALL');
 
-  // Métricas en vivo para la Hero Card flotante
-  const activeLogs = logs.filter((l) => l.values?.estado_equipo === 'ON');
+  const isSingleEquipment =
+    selectedEquipmentId !== 'ALL' &&
+    equipments.some((eq) => eq.id === selectedEquipmentId);
+
+  const scopedEquipments = isSingleEquipment
+    ? equipments.filter((eq) => eq.id === selectedEquipmentId)
+    : equipments;
+
+  // Última lectura de cada equipo en alcance (para reflejar el estado actual real)
+  const latestScopedLogs = scopedEquipments
+    .map((eq) => logs.find((l) => l.equipmentId === eq.id))
+    .filter((l): l is NonNullable<typeof l> => Boolean(l));
+
+  const activeLatestLogs = latestScopedLogs.filter(
+    (l) => l.values?.estado_equipo === 'ON' && l.values?.delta_t_agua !== undefined
+  );
+
+  const activePressureLogs = latestScopedLogs.filter(
+    (l) => l.values?.estado_equipo === 'ON' && l.values?.delta_p_filtro !== undefined
+  );
 
   const avgDeltaT =
-    activeLogs.length > 0
+    activeLatestLogs.length > 0
       ? (
-          activeLogs.reduce((acc, l) => acc + Number(l.values?.delta_t_agua || 0), 0) /
-          activeLogs.length
+          activeLatestLogs.reduce(
+            (acc, l) => acc + Number(l.values?.delta_t_agua || 0),
+            0
+          ) / activeLatestLogs.length
         ).toFixed(1)
-      : '9.6';
+      : '--';
 
   const maxDeltaP =
-    activeLogs.length > 0
-      ? Math.max(...activeLogs.map((l) => Number(l.values?.delta_p_filtro || 0))).toFixed(1)
-      : '18.5';
+    activePressureLogs.length > 0
+      ? Math.max(
+          ...activePressureLogs.map((l) => Number(l.values?.delta_p_filtro || 0))
+        ).toFixed(1)
+      : '--';
 
-  const equipmentsOnCount = equipments.filter((eq) => {
+  const equipmentsOnCount = scopedEquipments.filter((eq) => {
     const latest = logs.find((l) => l.equipmentId === eq.id);
-    return (latest?.values?.estado_equipo ?? 'ON') === 'ON';
+    if (!latest) return eq.status === 'operational';
+    return latest.values?.estado_equipo === 'ON';
   }).length;
 
-  const activeAlertsCount = logs.filter((l) => l.hasAlerts).length;
+  const activeAlertsCount = logs.filter(
+    (l) => l.hasAlerts && (!isSingleEquipment || l.equipmentId === selectedEquipmentId)
+  ).length;
+
+  const selectedEquipment = isSingleEquipment ? scopedEquipments[0] : null;
 
   const shifts: {
     id: Shift;
@@ -57,7 +85,11 @@ export const DashboardPage: React.FC = () => {
     { id: 'noche', label: 'Noche', hours: '23:00 – 07:00', icon: Moon },
   ];
 
-  const shiftLogs = logs.filter((l) => l.shift === selectedShift);
+  const shiftLogs = logs.filter(
+    (l) =>
+      l.shift === selectedShift &&
+      (!isSingleEquipment || l.equipmentId === selectedEquipmentId)
+  );
 
   return (
     <div className="space-y-8">
@@ -72,14 +104,11 @@ export const DashboardPage: React.FC = () => {
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2 text-sky-100 text-xs font-medium">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>{user?.companyName || 'Planta Central'} · Formato Oficial F-25</span>
+                <span>{user?.companyName || 'Planta Central'}</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
                 Hola, {user?.name || 'Carlos Rivas'}
               </h1>
-              <p className="text-sky-100/90 text-xs sm:text-sm">
-                Turno {selectedShift.charAt(0).toUpperCase() + selectedShift.slice(1)} activo · Cuarto de Chillers en operación
-              </p>
             </div>
 
             <div className="flex items-center gap-2.5 self-start sm:self-auto">
@@ -90,12 +119,18 @@ export const DashboardPage: React.FC = () => {
                 className="rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
               >
                 <Download className="w-4 h-4" />
-                <span>Reporte F-25</span>
+                <span>Reporte</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => navigate(`/bitacoras?nueva=1&turno=${selectedShift}`)}
+                onClick={() =>
+                  navigate(
+                    `/bitacoras?nueva=1&turno=${selectedShift}${
+                      selectedEquipment ? `&equipo=${selectedEquipment.id}` : ''
+                    }`
+                  )
+                }
                 style={{ padding: '0.6rem 1.1rem' }}
                 className="rounded-2xl bg-white hover:bg-sky-50 text-sky-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
@@ -104,6 +139,39 @@ export const DashboardPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Selector rápido de equipo para filtrar el resumen */}
+          {equipments.length > 0 && (
+            <div className="mt-5 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setSelectedEquipmentId('ALL')}
+                style={{ padding: '0.35rem 0.85rem' }}
+                className={`rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  !isSingleEquipment
+                    ? 'bg-white text-sky-700 shadow-xs'
+                    : 'bg-white/15 hover:bg-white/25 text-white'
+                }`}
+              >
+                Todos ({equipments.length})
+              </button>
+              {equipments.map((eq) => (
+                <button
+                  key={eq.id}
+                  type="button"
+                  onClick={() => setSelectedEquipmentId(eq.id)}
+                  style={{ padding: '0.35rem 0.85rem' }}
+                  className={`rounded-full text-xs font-bold transition-all cursor-pointer ${
+                    selectedEquipmentId === eq.id
+                      ? 'bg-white text-sky-700 shadow-xs'
+                      : 'bg-white/15 hover:bg-white/25 text-white'
+                  }`}
+                >
+                  {eq.tag}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Tarjeta blanca flotante superpuesta (2x2 en móvil, 4 cols en PC) */}
@@ -115,7 +183,11 @@ export const DashboardPage: React.FC = () => {
             <div className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
               {avgDeltaT} <span className="text-base font-semibold text-slate-400">°F</span>
             </div>
-            <div className="text-xs font-medium text-slate-400">Temp. Promedio</div>
+            <div className="text-xs font-medium text-slate-400">
+              {selectedEquipment
+                ? `Salto Térmico (${selectedEquipment.tag})`
+                : 'Salto Térmico Prom.'}
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -123,16 +195,22 @@ export const DashboardPage: React.FC = () => {
               {maxDeltaP}{' '}
               <span className="text-base font-semibold text-slate-400">PSI</span>
             </div>
-            <div className="text-xs font-medium text-slate-400">Presión Máx</div>
+            <div className="text-xs font-medium text-slate-400">
+              {selectedEquipment
+                ? `Dif. Filtro (${selectedEquipment.tag})`
+                : 'Dif. Filtro Máx'}
+            </div>
           </div>
 
           <div className="space-y-1">
             <div className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
               {equipmentsOnCount}{' '}
               <span className="text-lg font-semibold text-slate-300">/</span>{' '}
-              {equipments.length}
+              {scopedEquipments.length}
             </div>
-            <div className="text-xs font-medium text-slate-400">Equipos ON</div>
+            <div className="text-xs font-medium text-slate-400">
+              {selectedEquipment ? 'Estado Equipo' : 'Equipos ON'}
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -161,7 +239,7 @@ export const DashboardPage: React.FC = () => {
       {/* 2. SELECTOR DE TURNOS ("Turnos / Rondas") */}
       <section className="space-y-3.5">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-base font-bold text-slate-900">Turnos / Rondas</h2>
+          <h2 className="text-base font-bold text-slate-900">Turnos</h2>
           <span className="text-xs font-medium text-slate-400">
             {shiftLogs.length}{' '}
             {shiftLogs.length === 1 ? 'lectura en turno' : 'lecturas en turno'}
@@ -343,7 +421,7 @@ export const DashboardPage: React.FC = () => {
       <section className="space-y-3.5">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-base font-bold text-slate-900">
-            Rondas Registradas — Turno{' '}
+            Rondas Registradas{' '}
             {selectedShift.charAt(0).toUpperCase() + selectedShift.slice(1)}
           </h2>
           <button
@@ -356,48 +434,72 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          {(shiftLogs.length > 0 ? shiftLogs : logs.slice(0, 2)).map((log) => {
-            const eq = equipments.find((e) => e.id === log.equipmentId);
-            const v = log.values || {};
+        {shiftLogs.length === 0 ? (
+          <div
+            style={{ padding: '1.75rem 1.5rem' }}
+            className="rounded-3xl bg-white border border-slate-100 text-center space-y-2"
+          >
+            <div className="text-xs font-semibold text-slate-500">
+              No hay rondas registradas en el turno {selectedShift}.
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/bitacoras?nueva=1&turno=${selectedShift}${
+                    selectedEquipment ? `&equipo=${selectedEquipment.id}` : ''
+                  }`
+                )
+              }
+              className="text-xs font-bold text-sky-600 hover:text-sky-700 cursor-pointer"
+            >
+              + Registrar ronda en este turno
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {shiftLogs.map((log) => {
+              const eq = equipments.find((e) => e.id === log.equipmentId);
+              const v = log.values || {};
 
-            return (
-              <div
-                key={log.id}
-                onClick={() => navigate('/bitacoras')}
-                style={{ padding: '1.1rem 1.25rem' }}
-                className="rounded-2xl bg-white border border-slate-100 shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-4"
-              >
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-slate-900">
-                      {eq?.tag || log.equipmentId}
-                    </span>
-                    <span className="text-xs text-slate-400">·</span>
-                    <span className="text-xs font-medium text-slate-500">
-                      {log.date} ({v.hora || '--'})
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 truncate">
-                    {log.observations || 'Lectura operativa dentro de parámetros.'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  {v.delta_t_agua !== undefined && (
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-sky-600">
-                        {v.delta_t_agua} °F
-                      </div>
-                      <div className="text-[10px] text-slate-400">Dif. Agua</div>
+              return (
+                <div
+                  key={log.id}
+                  onClick={() => navigate('/bitacoras')}
+                  style={{ padding: '1.1rem 1.25rem' }}
+                  className="rounded-2xl bg-white border border-slate-100 shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-4"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-slate-900">
+                        {eq?.tag || log.equipmentId}
+                      </span>
+                      <span className="text-xs text-slate-400">·</span>
+                      <span className="text-xs font-medium text-slate-500">
+                        {log.date} ({v.hora || '--'})
+                      </span>
                     </div>
-                  )}
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                    <p className="text-xs text-slate-400 truncate">
+                      {log.observations || 'Lectura operativa dentro de parámetros.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    {v.delta_t_agua !== undefined && (
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-sky-600">
+                          {v.delta_t_agua} °F
+                        </div>
+                        <div className="text-[10px] text-slate-400">Dif. Agua</div>
+                      </div>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );

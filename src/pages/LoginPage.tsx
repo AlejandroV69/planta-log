@@ -1,34 +1,76 @@
 import React, { useState } from 'react';
-import { useAuth, COMPANIES } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Droplets,
   KeyRound,
-  IdCard,
+  Mail,
   ArrowRight,
   Building2,
   ChevronDown,
+  Moon,
+  Sun,
 } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 import { RegisterPage } from './RegisterPage';
 
 export const LoginPage: React.FC = () => {
-  const { loginWithCredentials } = useAuth();
+  const { signIn, companies } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [isRegistering, setIsRegistering] = useState(false);
-  const [companyId, setCompanyId] = useState(COMPANIES[0].id);
-  const [operatorId, setOperatorId] = useState('OP-7492');
-  const [pin, setPin] = useState('••••••••');
+  const [companyId, setCompanyId] = useState(
+    () => localStorage.getItem('plantalog_selected_company') || ''
+  );
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   if (isRegistering) {
     return <RegisterPage onBackToLogin={() => setIsRegistering(false)} />;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const selectedCompanyId = companies.some((c) => c.id === companyId)
+    ? companyId
+    : companies[0]?.id || '';
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('plantalog_selected_company', companyId);
-    loginWithCredentials(operatorId, pin, companyId);
+    setError(null);
+    if (!selectedCompanyId) {
+      setError('Selecciona una compañía.');
+      return;
+    }
+    if (!email.trim() || !password) {
+      setError('Ingresa tu correo y contraseña.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      localStorage.setItem('plantalog_selected_company', selectedCompanyId);
+      await signIn(email, password, selectedCompanyId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col justify-between font-sans p-4 sm:p-6">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col justify-between font-sans p-4 sm:p-6 relative">
+      <button
+        type="button"
+        onClick={toggleTheme}
+        title={theme === 'dark' ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
+        style={{ padding: '0.6rem' }}
+        className="fixed top-4 right-4 z-30 rounded-2xl bg-white border border-slate-100 shadow-sm text-slate-500 hover:text-sky-600 transition-colors cursor-pointer"
+      >
+        {theme === 'dark' ? (
+          <Sun className="w-4 h-4 text-amber-400" />
+        ) : (
+          <Moon className="w-4 h-4" />
+        )}
+      </button>
+
       <div className="max-w-[380px] w-full mx-auto my-auto">
         <div
           style={{ padding: '2.25rem 2rem' }}
@@ -59,12 +101,13 @@ export const LoginPage: React.FC = () => {
                   <Building2 className="w-4 h-4" />
                 </div>
                 <select
-                  value={companyId}
+                  value={selectedCompanyId}
                   onChange={(e) => setCompanyId(e.target.value)}
                   style={{ padding: '0.75rem 2.25rem 0.75rem 2.4rem' }}
                   className="w-full appearance-none bg-slate-50 border border-slate-200/80 rounded-2xl text-slate-900 font-semibold text-xs focus:outline-none focus:bg-white focus:border-sky-500 transition-colors cursor-pointer"
                 >
-                  {COMPANIES.map((comp) => (
+                  {companies.length === 0 && <option value="">Cargando empresas...</option>}
+                  {companies.map((comp) => (
                     <option key={comp.id} value={comp.id}>
                       {comp.name}
                     </option>
@@ -76,30 +119,31 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* USUARIO */}
+            {/* CORREO */}
             <div className="space-y-1.5">
               <label className="text-slate-700 font-semibold block">
-                Usuario
+                Correo
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <IdCard className="w-4 h-4" />
+                  <Mail className="w-4 h-4" />
                 </div>
                 <input
-                  type="text"
-                  value={operatorId}
-                  onChange={(e) => setOperatorId(e.target.value)}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
                   style={{ padding: '0.75rem 0.9rem 0.75rem 2.4rem' }}
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl text-slate-900 font-semibold text-xs focus:outline-none focus:bg-white focus:border-sky-500 transition-colors"
-                  placeholder="OP-7492"
+                  placeholder="correo@planta.com"
                 />
               </div>
             </div>
 
-            {/* PIN DE ACCESO */}
+            {/* CONTRASEÑA */}
             <div className="space-y-1.5">
               <label className="text-slate-700 font-semibold block">
-                PIN de Acceso
+                Contraseña
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -107,21 +151,32 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <input
                   type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   style={{ padding: '0.75rem 0.9rem 0.75rem 2.4rem' }}
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl text-slate-900 font-semibold text-xs focus:outline-none focus:bg-white focus:border-sky-500 transition-colors"
                 />
               </div>
             </div>
 
+            {error && (
+              <div
+                style={{ padding: '0.65rem 0.9rem' }}
+                className="rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-xs font-medium text-center"
+              >
+                {error}
+              </div>
+            )}
+
             <div className="pt-2">
               <button
                 type="submit"
+                disabled={submitting}
                 style={{ padding: '0.85rem 1.25rem' }}
-                className="w-full rounded-2xl bg-sky-500 hover:bg-sky-600 active:scale-[0.99] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
+                className="w-full rounded-2xl bg-sky-500 hover:bg-sky-600 active:scale-[0.99] disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
               >
-                <span>Entrar</span>
+                <span>{submitting ? 'Entrando...' : 'Entrar'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

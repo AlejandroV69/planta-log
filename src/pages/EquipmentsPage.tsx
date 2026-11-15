@@ -15,6 +15,7 @@ import {
   Cpu,
 } from 'lucide-react';
 import { useLogs } from '../context/LogsContext';
+import { useAuth } from '../context/AuthContext';
 import type { Equipment } from '../types/domain';
 
 type EquipmentStatus = Equipment['status'];
@@ -77,7 +78,13 @@ const QUICK_TYPES = [
 ];
 
 export const EquipmentsPage: React.FC = () => {
-  const { equipments, logs, addEquipment, updateEquipment, deleteEquipment } = useLogs();
+  const { equipments, logs, addEquipment, updateEquipment, deleteEquipment, loading, loadError } =
+    useLogs();
+  const { user } = useAuth();
+  const canManage = user?.roles === 'supervisor' || user?.roles === 'admin';
+  const canDeleteEq = user?.roles === 'admin';
+  const [saving, setSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -144,7 +151,7 @@ export const EquipmentsPage: React.FC = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
@@ -175,31 +182,37 @@ export const EquipmentsPage: React.FC = () => {
       return;
     }
 
-    if (editingId) {
-      updateEquipment(editingId, {
-        tag: formData.tag,
-        name: formData.name,
-        model: formData.model,
-        serialNumber: formData.serialNumber,
-        capacity: formData.capacity,
-        refrigerant: formData.refrigerant,
-        location: formData.location,
-        status: formData.status,
-      });
-    } else {
-      addEquipment({
-        tag: formData.tag,
-        name: formData.name,
-        model: formData.model,
-        serialNumber: formData.serialNumber,
-        capacity: formData.capacity,
-        refrigerant: formData.refrigerant,
-        location: formData.location,
-        status: formData.status,
-      });
+    try {
+      setSaving(true);
+      if (editingId) {
+        await updateEquipment(editingId, {
+          tag: formData.tag,
+          name: formData.name,
+          model: formData.model,
+          serialNumber: formData.serialNumber,
+          capacity: formData.capacity,
+          refrigerant: formData.refrigerant,
+          location: formData.location,
+          status: formData.status,
+        });
+      } else {
+        await addEquipment({
+          tag: formData.tag,
+          name: formData.name,
+          model: formData.model,
+          serialNumber: formData.serialNumber,
+          capacity: formData.capacity,
+          refrigerant: formData.refrigerant,
+          location: formData.location,
+          status: formData.status,
+        });
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'No se pudo guardar el equipo.');
+    } finally {
+      setSaving(false);
     }
-
-    setIsModalOpen(false);
   };
 
   const getEquipmentIcon = (tag: string) => {
@@ -237,21 +250,38 @@ export const EquipmentsPage: React.FC = () => {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             Áreas y Máquinas
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Registra, edita o administra los equipos de planta y toma rondas operativas.
-          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenCreate}
-          style={{ padding: '0.7rem 1.2rem' }}
-          className="rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-xs flex items-center gap-2 shadow-md shadow-sky-500/20 transition-all cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Registrar Equipo</span>
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            style={{ padding: '0.7rem 1.2rem' }}
+            className="rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-xs flex items-center gap-2 shadow-md shadow-sky-500/20 transition-all cursor-pointer self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Registrar Equipo</span>
+          </button>
+        )}
       </div>
+
+      {loadError && (
+        <div
+          style={{ padding: '0.75rem 1rem' }}
+          className="rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-xs font-medium"
+        >
+          No se pudieron cargar los datos: {loadError}
+        </div>
+      )}
+      {deleteError && (
+        <div
+          style={{ padding: '0.75rem 1rem' }}
+          className="rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-xs font-medium"
+        >
+          {deleteError}
+        </div>
+      )}
+      {loading && <div className="text-xs text-slate-400">Cargando equipos...</div>}
 
       {/* BARRA DE BÚSQUEDA Y FILTRO DE ESTADO */}
       <div
@@ -320,15 +350,17 @@ export const EquipmentsPage: React.FC = () => {
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
             Puedes limpiar la búsqueda o registrar una nueva máquina en la planta.
           </p>
-          <button
-            type="button"
-            onClick={handleOpenCreate}
-            style={{ padding: '0.6rem 1.1rem' }}
-            className="rounded-2xl bg-sky-50 text-sky-600 hover:bg-sky-100 font-bold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Registrar Equipo</span>
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={handleOpenCreate}
+              style={{ padding: '0.6rem 1.1rem' }}
+              className="rounded-2xl bg-sky-50 text-sky-600 hover:bg-sky-100 font-bold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Registrar Equipo</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -359,31 +391,36 @@ export const EquipmentsPage: React.FC = () => {
                         {badge.label}
                       </span>
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(eq)}
-                        style={{ padding: '0.4rem' }}
-                        className="rounded-xl bg-slate-50 hover:bg-sky-50 text-slate-400 hover:text-sky-600 transition-colors cursor-pointer"
-                        title="Editar equipo"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(eq)}
+                          style={{ padding: '0.4rem' }}
+                          className="rounded-xl bg-slate-50 hover:bg-sky-50 text-slate-400 hover:text-sky-600 transition-colors cursor-pointer"
+                          title="Editar equipo"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDeletingId(isConfirmingDelete ? null : eq.id)
-                        }
-                        style={{ padding: '0.4rem' }}
-                        className={`rounded-xl transition-colors cursor-pointer ${
-                          isConfirmingDelete
-                            ? 'bg-red-100 text-red-600'
-                            : 'bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500'
-                        }`}
-                        title="Eliminar equipo"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canDeleteEq && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeleteError('');
+                            setDeletingId(isConfirmingDelete ? null : eq.id);
+                          }}
+                          style={{ padding: '0.4rem' }}
+                          className={`rounded-xl transition-colors cursor-pointer ${
+                            isConfirmingDelete
+                              ? 'bg-red-100 text-red-600'
+                              : 'bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500'
+                          }`}
+                          title="Eliminar equipo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -399,8 +436,14 @@ export const EquipmentsPage: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => {
-                            deleteEquipment(eq.id);
+                          onClick={async () => {
+                            try {
+                              await deleteEquipment(eq.id);
+                            } catch (err) {
+                              setDeleteError(
+                                err instanceof Error ? err.message : 'No se pudo eliminar.'
+                              );
+                            }
                             setDeletingId(null);
                           }}
                           style={{ padding: '0.25rem 0.6rem' }}
@@ -719,11 +762,14 @@ export const EquipmentsPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   style={{ padding: '0.65rem 1.3rem' }}
-                  className="rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
+                  className="rounded-2xl bg-sky-500 hover:bg-sky-600 disabled:opacity-60 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
-                  <span>{editingId ? 'Guardar Cambios' : 'Registrar Equipo'}</span>
+                  <span>
+                    {saving ? 'Guardando...' : editingId ? 'Guardar Cambios' : 'Registrar Equipo'}
+                  </span>
                 </button>
               </div>
             </form>

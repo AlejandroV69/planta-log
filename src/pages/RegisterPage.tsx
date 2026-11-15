@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth, COMPANIES } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Droplets,
   User,
@@ -11,54 +11,69 @@ import {
   ArrowRight,
   ArrowLeft,
 } from 'lucide-react';
-import type { UserRoles } from '../types/domain';
 
 interface RegisterPageProps {
   onBackToLogin: () => void;
 }
 
 export const RegisterPage: React.FC<RegisterPageProps> = ({ onBackToLogin }) => {
-  const { registerUser } = useAuth();
+  const { signUp, companies } = useAuth();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [badgeNumber, setBadgeNumber] = useState('');
-  const [companyId, setCompanyId] = useState(COMPANIES[0].id);
+  const [companyId, setCompanyId] = useState('');
   const [customCompanyName, setCustomCompanyName] = useState('');
-  const [role, setRole] = useState<UserRoles>('operator');
-  const [pin, setPin] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const selectedCompanyId = companyId || companies[0]?.id || 'otra';
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!name.trim()) {
       setError('Por favor ingresa tu nombre completo.');
       return;
     }
-    if (!badgeNumber.trim() && !email.trim()) {
-      setError('Ingresa tu usuario/ID de operador o correo.');
+    if (!email.trim()) {
+      setError('Ingresa tu correo.');
       return;
     }
-    if (!pin.trim()) {
-      setError('Define un PIN de acceso.');
+    if (password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    const isNewCompany = selectedCompanyId === 'otra';
+    if (isNewCompany && !customCompanyName.trim()) {
+      setError('Escribe el nombre de tu empresa.');
+      return;
+    }
+    if (!isNewCompany && !selectedCompanyId) {
+      setError('Selecciona una compañía.');
       return;
     }
 
-    const selectedCompany = COMPANIES.find((c) => c.id === companyId);
-    const finalCompanyName =
-      companyId === 'otra'
-        ? customCompanyName.trim() || 'Empresa Industrial'
-        : selectedCompany?.name || COMPANIES[0].name;
-
-    registerUser({
-      name,
-      email: email || `${badgeNumber.toLowerCase()}@planta.com`,
-      badgeNumber: badgeNumber || 'OP-1001',
-      companyId: companyId === 'otra' ? `comp-${Date.now()}` : companyId,
-      companyName: finalCompanyName,
-      roles: role,
-      pin,
-    });
+    setSubmitting(true);
+    try {
+      const result = await signUp({
+        name,
+        email,
+        badgeNumber,
+        password,
+        companyId: isNewCompany ? undefined : selectedCompanyId,
+        newCompanyName: isNewCompany ? customCompanyName : undefined,
+      });
+      if (result.needsConfirmation) {
+        setInfo('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear la cuenta.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -135,12 +150,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onBackToLogin }) => 
                   <Building2 className="w-4 h-4" />
                 </div>
                 <select
-                  value={companyId}
+                  value={selectedCompanyId}
                   onChange={(e) => setCompanyId(e.target.value)}
                   style={{ padding: '0.75rem 2.25rem 0.75rem 2.4rem' }}
                   className="w-full appearance-none bg-slate-50 border border-slate-200/80 rounded-2xl text-slate-900 font-semibold text-xs focus:outline-none focus:bg-white focus:border-sky-500 transition-colors cursor-pointer"
                 >
-                  {COMPANIES.map((comp) => (
+                  {companies.map((comp) => (
                     <option key={comp.id} value={comp.id}>
                       {comp.name}
                     </option>
@@ -154,7 +169,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onBackToLogin }) => 
             </div>
 
             {/* CAMPO ADICIONAL SI ELIGE "OTRA EMPRESA" */}
-            {companyId === 'otra' && (
+            {selectedCompanyId === 'otra' && (
               <div className="space-y-1.5">
                 <label className="text-slate-700 font-semibold block">
                   Nombre de tu Empresa
@@ -174,8 +189,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onBackToLogin }) => 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-slate-700 font-semibold block">
-                  Usuario
-                </label>
+                  Usuario / ID (opcional)                </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <IdCard className="w-4 h-4" />
@@ -214,43 +228,10 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onBackToLogin }) => 
               </div>
             </div>
 
-            {/* CARGO / ROL */}
+            {/* CONTRASEÑA */}
             <div className="space-y-1.5">
               <label className="text-slate-700 font-semibold block">
-                Cargo en Planta
-              </label>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setRole('operator')}
-                  style={{ padding: '0.65rem 0.75rem' }}
-                  className={`rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
-                    role === 'operator'
-                      ? 'bg-sky-50 text-sky-600 border-sky-200'
-                      : 'bg-slate-50 text-slate-500 border-slate-200/70 hover:bg-slate-100'
-                  }`}
-                >
-                  Operador Técnico
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('supervisor')}
-                  style={{ padding: '0.65rem 0.75rem' }}
-                  className={`rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
-                    role === 'supervisor'
-                      ? 'bg-sky-50 text-sky-600 border-sky-200'
-                      : 'bg-slate-50 text-slate-500 border-slate-200/70 hover:bg-slate-100'
-                  }`}
-                >
-                  Supervisor
-                </button>
-              </div>
-            </div>
-
-            {/* PIN DE ACCESO */}
-            <div className="space-y-1.5">
-              <label className="text-slate-700 font-semibold block">
-                PIN de Acceso
+                Contraseña
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -258,25 +239,39 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onBackToLogin }) => 
                 </div>
                 <input
                   type="password"
-                  value={pin}
+                  value={password}
                   onChange={(e) => {
-                    setPin(e.target.value);
+                    setPassword(e.target.value);
                     setError(null);
                   }}
+                  autoComplete="new-password"
                   style={{ padding: '0.75rem 0.9rem 0.75rem 2.4rem' }}
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl text-slate-900 font-semibold text-xs focus:outline-none focus:bg-white focus:border-sky-500 transition-colors"
-                  placeholder="Crea tu PIN de 4 a 8 dígitos"
+                  placeholder="Mínimo 6 caracteres"
                 />
               </div>
+              <p className="text-[11px] text-slate-400">
+                Entrarás como Operador. Un administrador puede cambiar tu cargo después.
+              </p>
             </div>
+
+            {info && (
+              <div
+                style={{ padding: '0.65rem 0.9rem' }}
+                className="rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-medium text-center"
+              >
+                {info}
+              </div>
+            )}
 
             <div className="pt-2">
               <button
                 type="submit"
+                disabled={submitting}
                 style={{ padding: '0.85rem 1.25rem' }}
-                className="w-full rounded-2xl bg-sky-500 hover:bg-sky-600 active:scale-[0.99] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
+                className="w-full rounded-2xl bg-sky-500 hover:bg-sky-600 active:scale-[0.99] disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
               >
-                <span>Registrarme</span>
+                <span>{submitting ? 'Creando cuenta...' : 'Registrarme'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

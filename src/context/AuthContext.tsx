@@ -1,169 +1,191 @@
-import React, { createContext, useContext, useState } from 'react';
-import type { UserProfile, UserRoles } from '../types/domain';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+import type { Shift, UserProfile, UserRoles } from '../types/domain';
 
-export const COMPANIES = [
-  { id: 'planta-central', name: 'Planta Central — Sede Corporativa' },
-  { id: 'polar-ind', name: 'Empresas Polar — Planta Refrigeración' },
-  { id: 'femsa-util', name: 'Coca-Cola FEMSA — Servicios Industriales' },
-  { id: 'nestle-term', name: 'Nestlé — Complejo Térmico Norte' },
-];
+export interface Company {
+  id: string;
+  name: string;
+}
 
-export const DEMO_USERS: Record<UserRoles, UserProfile> = {
-  operator: {
-    id: 'usr-op-01',
-    name: 'Carlos Rivas',
-    email: 'carlos.rivas@planta.com',
-    roles: 'operator',
-    badgeNumber: 'OP-7492',
-    assignedArea: 'Cuarto de Máquinas - Climatización',
-    defaultShift: 'mañana',
-    companyId: 'planta-central',
-    companyName: 'Planta Central — Sede Corporativa',
-  },
-  supervisor: {
-    id: 'usr-sup-01',
-    name: 'Ing. Roberto Mendoza',
-    email: 'roberto.mendoza@planta.com',
-    roles: 'supervisor',
-    badgeNumber: 'SUP-108',
-    assignedArea: 'Jefatura de Operaciones y Mantenimiento',
-    companyId: 'planta-central',
-    companyName: 'Planta Central — Sede Corporativa',
-  },
-  admin: {
-    id: 'usr-adm-01',
-    name: 'Administrador de Planta',
-    email: 'admin@planta.com',
-    roles: 'admin',
-    badgeNumber: 'ADM-001',
-    companyId: 'planta-central',
-    companyName: 'Planta Central — Sede Corporativa',
-  },
-};
-
-export interface RegisterUserInput {
+export interface SignUpInput {
   name: string;
   email: string;
   badgeNumber: string;
-  companyId: string;
-  companyName: string;
-  roles: UserRoles;
-  pin: string;
+  password: string;
+  /** uuid de una empresa existente */
+  companyId?: string;
+  /** nombre de una empresa nueva (el primer usuario queda como admin) */
+  newCompanyName?: string;
 }
 
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
-  registeredUsers: UserProfile[];
-  loginAsDemo: (role: UserRoles, companyId?: string) => void;
-  loginWithCredentials: (identifier: string, pin: string, companyId: string) => void;
-  registerUser: (input: RegisterUserInput) => void;
-  logout: () => void;
+  loading: boolean;
+  companies: Company[];
+  signIn: (email: string, password: string, companyId: string) => Promise<void>;
+  signUp: (input: SignUpInput) => Promise<{ needsConfirmation: boolean }>;
+  logout: () => Promise<void>;
+}
+
+interface ProfileRow {
+  id: string;
+  full_name: string;
+  email: string;
+  badge_number: string | null;
+  role: UserRoles;
+  assigned_area: string | null;
+  default_shift: Shift | null;
+  is_active: boolean;
+  company_id: string;
+  companies: { name: string } | { name: string }[] | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'plantalog_user_session';
-const USERS_STORAGE_KEY = 'plantalog_registered_users_v1';
+async function fetchProfile(userId: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(
+      'id, full_name, email, badge_number, role, assigned_area, default_shift, is_active, company_id, companies(name)'
+    )
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const row = data as unknown as ProfileRow;
+  if (!row.is_active) return null;
+
+  const company = Array.isArray(row.companies) ? row.companies[0] : row.companies;
+
+  return {
+    id: row.id,
+    name: row.full_name,
+    email: row.email,
+    roles: row.role,
+    badgeNumber: row.badge_number ?? undefined,
+    assignedArea: row.assigned_area ?? undefined,
+    defaultShift: row.default_shift ?? undefined,
+    companyId: row.company_id,
+    companyName: company?.name,
+  };
+}
+
+function translateAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'Correo o contraseña incorrectos.';
+  if (m.includes('email not confirmed')) return 'Debes confirmar tu correo antes de entrar.';
+  if (m.includes('already registered') || m.includes('already been registered'))
+    return 'Ese correo ya está registrado.';
+  if (m.includes('password should be at least'))
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  if (m.includes('database error saving new user'))
+    return 'No se pudo crear el perfil. Revisa que el nombre de empresa no exista ya y que el schema.sql esté ejecutado.';
+  if (m.includes('rate limit')) return 'Demasiados intentos. Espera un momento.';
+  return message;
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(() => {
-    const saved = localStorage.getItem(USERS_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {
-        // Fallback a usuarios demo
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const signingInRef = useRef(false);
+
+  // Empresas para el select del login / registro
+  useEffect(() => {
+    supabase
+      .from('companies')
+      .select('id, name')
+      .order('name')
+      .then(({ data }) => {
+        if (data) setCompanies(data as Company[]);
+      });
+  }, []);
+
+  // Restaurar sesión y escuchar cambios
+  useEffect(() => {
+    let active = true;
+
+    const applySession = async (session: Session | null) => {
+      if (!session) {
+        if (active) setUser(null);
+        return;
       }
-    }
-    return Object.values(DEMO_USERS);
-  });
-
-  const [user, setUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
-
-  const loginAsDemo = (role: UserRoles, companyId?: string) => {
-    const comp = COMPANIES.find((c) => c.id === companyId) || COMPANIES[0];
-    const selectedUser: UserProfile = {
-      ...DEMO_USERS[role],
-      companyId: comp.id,
-      companyName: comp.name,
-    };
-    setUser(selectedUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedUser));
-  };
-
-  const loginWithCredentials = (identifier: string, _pin: string, companyId: string) => {
-    const cleanId = identifier.trim().toLowerCase();
-    const comp = COMPANIES.find((c) => c.id === companyId) || COMPANIES[0];
-
-    const matchedUser = registeredUsers.find(
-      (u) =>
-        (u.badgeNumber || '').toLowerCase() === cleanId ||
-        (u.email || '').toLowerCase() === cleanId ||
-        (u.name || '').toLowerCase() === cleanId
-    );
-
-    if (matchedUser) {
-      const activeUser: UserProfile = {
-        ...matchedUser,
-        companyId: matchedUser.companyId || comp.id,
-        companyName: matchedUser.companyName || comp.name,
-      };
-      setUser(activeUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(activeUser));
-      return;
-    }
-
-    // Si ingresa cualquier usuario en modo demo, entra con ese ID y la empresa seleccionada
-    const fallbackUser: UserProfile = {
-      ...DEMO_USERS.operator,
-      badgeNumber: identifier.trim() || 'OP-7492',
-      companyId: comp.id,
-      companyName: comp.name,
-    };
-    setUser(fallbackUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fallbackUser));
-  };
-
-  const registerUser = (input: RegisterUserInput) => {
-    const newUser: UserProfile = {
-      id: `usr-${Date.now()}`,
-      name: input.name.trim(),
-      email: input.email.trim(),
-      badgeNumber: input.badgeNumber.trim() || `OP-${Math.floor(1000 + Math.random() * 9000)}`,
-      roles: input.roles,
-      companyId: input.companyId,
-      companyName: input.companyName,
-      pin: input.pin,
-      defaultShift: 'mañana',
+      const profile = await fetchProfile(session.user.id);
+      if (active) setUser(profile);
     };
 
-    setRegisteredUsers((prev) => {
-      const updated = [newUser, ...prev];
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
+    supabase.auth.getSession().then(async ({ data }) => {
+      await applySession(data.session);
+      if (active) setLoading(false);
     });
 
-    setUser(newUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (signingInRef.current && event === 'SIGNED_IN') return;
+      // Se difiere para no bloquear el cliente de Supabase dentro del callback
+      setTimeout(() => {
+        void applySession(session);
+      }, 0);
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signIn = async (email: string, password: string, companyId: string) => {
+    signingInRef.current = true;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw new Error(translateAuthError(error.message));
+
+      const profile = await fetchProfile(data.user.id);
+      if (!profile) {
+        await supabase.auth.signOut();
+        throw new Error('Tu cuenta no tiene perfil activo. Contacta al administrador.');
+      }
+      if (profile.companyId !== companyId) {
+        await supabase.auth.signOut();
+        throw new Error('Tu usuario no pertenece a la compañía seleccionada.');
+      }
+      setUser(profile);
+    } finally {
+      signingInRef.current = false;
+    }
   };
 
-  const logout = () => {
+  const signUp = async (input: SignUpInput) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: input.email.trim(),
+      password: input.password,
+      options: {
+        data: {
+          full_name: input.name.trim(),
+          badge_number: input.badgeNumber.trim() || null,
+          company_id: input.newCompanyName ? null : input.companyId,
+          company_name: input.newCompanyName?.trim() || null,
+        },
+      },
+    });
+    if (error) throw new Error(translateAuthError(error.message));
+
+    // Con "Confirm email" activo no hay sesión hasta confirmar el correo
+    if (!data.session) return { needsConfirmation: true };
+
+    // Si creó empresa nueva, refresca el listado
+    const { data: list } = await supabase.from('companies').select('id, name').order('name');
+    if (list) setCompanies(list as Company[]);
+    return { needsConfirmation: false };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
   };
 
   return (
@@ -171,10 +193,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         isAuthenticated: !!user,
-        registeredUsers,
-        loginAsDemo,
-        loginWithCredentials,
-        registerUser,
+        loading,
+        companies,
+        signIn,
+        signUp,
         logout,
       }}
     >
