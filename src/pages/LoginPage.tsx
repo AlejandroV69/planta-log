@@ -197,7 +197,7 @@ export const LoginPage: React.FC = () => {
       </div>
 
       <footer className="text-center text-xs text-slate-400 py-3">
-        PlantaLog · Control Operativo F-25
+        PlantaLog · Control Operativo 
       </footer>
     </div>
   );
