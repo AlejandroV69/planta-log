@@ -1,75 +1,56 @@
-# React + TypeScript + Vite
+<div align="center">
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+# PlantaLog
 
-Currently, two official plugins are available:
+**Control operativo y bitácoras digitales F-25 para cuartos de máquinas y chillers.**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+![React](https://img.shields.io/badge/React-19-0284C7?style=flat-square&logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.0-0F172A?style=flat-square&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Auth_&_PostgreSQL-10B981?style=flat-square&logo=supabase&logoColor=white)
 
-## React Compiler
+</div>
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## ¿Qué hace?
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Multi-empresa con roles:** Acceso por compañía (`operator`, `supervisor`, `admin`) con aislamiento real mediante RLS en Supabase.
+- **Dashboard en vivo:** Salto térmico promedio (°F), diferencial máximo de filtro (PSI), equipos activos, filtro por máquina y vista por turno (*Mañana*, *Tarde*, *Noche*).
+- **Toma de rondas F-25:** Wizard guiado en 6 pasos con diales en tiempo real, cálculo automático de diferenciales y detección de alertas fuera de rango.
+- **Gestión de equipos (CRUD):** Alta, edición, búsqueda y estado operativo de chillers, bombas y manejadoras.
+- **Historial y Excel:** Bitácoras filtrables y exportación directa a `.xlsx` con el formato oficial F-25.
+- **Modo Día / Noche + Mobile-First:** Interfaz adaptable a escritorio y teléfono con perfil móvil integrado.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Puesta en marcha
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. **Instala dependencias:**
+   ```bash
+   npm install
+   ```
 
-```
+2. **Configura Supabase:**
+   - Ejecuta [`supabase/schema.sql`](supabase/schema.sql) en el **SQL Editor** de tu proyecto.
+   - Copia `.env.example` como `.env` y agrega tus credenciales:
+     ```env
+     VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+     VITE_SUPABASE_ANON_KEY=tu_anon_public_key
+     ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+3. **Arranca la app:**
+   ```bash
+   npm run dev
+   ```
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Scripts
 
+```bash
+npm run dev      # Servidor de desarrollo
+npm run build    # Compilar para producción
+npm run lint     # Revisión con ESLint
+npm run preview  # Vista previa del build
 ```
